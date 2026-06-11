@@ -1,61 +1,56 @@
 ---
 name: check-architecture
-description: Verifica violações de arquitetura em camadas no projeto. Use quando quiser garantir que as dependências entre camadas estão corretas e que a lógica está no lugar certo.
-argument-hint: [camada ou arquivo específico]
+description: Verifica violações de arquitetura no projeto TodoApi. Use quando quiser garantir que a estrutura de pastas, responsabilidades e dependências estão corretas.
+argument-hint: [pasta ou arquivo específico]
 ---
 
-Você irá verificar se o projeto respeita a arquitetura em camadas definida pelo template.
+Você irá verificar se o projeto respeita a arquitetura definida para o `TodoApi`.
 
 ## Passos
 
-1. Se $ARGUMENTS for fornecido, foque na camada ou arquivo indicado; caso contrário, analise todo o projeto
-2. Use as ferramentas de busca para inspecionar os `using` e referências entre projetos nos arquivos `.cs` e `.csproj`
-3. Verifique cada regra abaixo
-4. Apresente um relatório com violações encontradas e como corrigi-las
+1. Se $ARGUMENTS for fornecido, foque na pasta ou arquivo indicado; caso contrário, analise todo o projeto
+2. Inspecione os arquivos `.cs` e `Program.cs` buscando violações das regras abaixo
+3. Apresente um relatório com violações encontradas e como corrigi-las
 
-## Mapa de dependências permitidas
+## Estrutura esperada do projeto
 
 ```
-TemplateAPI.API
-  └── TemplateAPI.Servico
-  └── TemplateAPI.Entidades
-  └── TemplateAPI.Transversais
-
-TemplateAPI.Servico
-  └── TemplateAPI.Integracoes
-  └── TemplateAPI.Entidades
-  └── TemplateAPI.Transversais
-
-TemplateAPI.Integracoes
-  └── TemplateAPI.Entidades
-  └── TemplateAPI.Transversais
-
-TemplateAPI.Entidades
-  └── TemplateAPI.Transversais
-
-TemplateAPI.Transversais
-  └── (sem dependências internas)
+TodoApi/
+  Controllers/   — orquestração HTTP, validação de entrada, respostas
+  Context/       — AppDbContext e configuração do EF Core
+  Models/        — entidades, DTOs e modelos de entrada
+  Program.cs     — registro de DI e pipeline de middlewares
+TodoApi.Tests/
+  Controllers/   — testes unitários dos controllers
 ```
 
 ## Regras a verificar
 
-### Separação de responsabilidades
-- **Controllers** (`TemplateAPI.API/Controllers/`): apenas orquestração HTTP, sem lógica de negócio
-- **Serviços** (`TemplateAPI.Servico/`): toda a lógica de negócio e regras
-- **Integrações** (`TemplateAPI.Integracoes/`): acesso a dados externos, APIs, AWS
-- **Entidades** (`TemplateAPI.Entidades/`): apenas modelos, entidades e VOs — sem lógica
-- **Transversais** (`TemplateAPI.Transversais/`): utilitários compartilhados sem dependências internas
+### Controllers (`TodoApi/Controllers/`)
+- Apenas orquestração HTTP: receber request, chamar contexto/serviço, retornar response
+- Não devem conter lógica de negócio complexa (cálculos, regras de domínio, transformações pesadas)
+- Devem injetar dependências via construtor (`AppDbContext`, `IMemoryCache`, etc.)
+- Não devem instanciar dependências com `new` (ex: `new AppDbContext(...)`)
+- Devem ter `[Route]` e verbos HTTP explícitos em cada action
+- Retornar `ActionResult<T>` ou `IActionResult`
 
-### Violações comuns a detectar
-- `TemplateAPI.API` importando diretamente `TemplateAPI.Integracoes`
-- `TemplateAPI.Servico` importando `TemplateAPI.API`
-- Lógica de negócio dentro de controllers (queries, cálculos, regras)
-- Acesso a banco/AWS direto em controllers ou serviços sem passar por `Integracoes`
-- Entidades com métodos de negócio complexos (devem ser apenas data holders)
-- Instanciação direta de dependências com `new` ao invés de injeção de dependência
+### Context (`TodoApi/Context/`)
+- Apenas `DbContext` e sua configuração (`DbSet`, `OnModelCreating`)
+- Não deve conter lógica de negócio ou manipulação de cache
 
-### Verificação nos .csproj
-Leia os arquivos `.csproj` de cada camada e confirme que as referências `<ProjectReference>` respeitam o mapa acima.
+### Models (`TodoApi/Models/`)
+- Apenas propriedades de dados — sem lógica de negócio
+- DTOs (`*DTO`) usados para transferência de dados entre controller e cliente
+- Entidades usadas pelo EF Core para persistência
+
+### Program.cs
+- Apenas registro de serviços (`builder.Services.*`) e configuração de middlewares (`app.Use*`, `app.Map*`)
+- Não deve conter lógica de negócio inline
+
+### Boas práticas gerais
+- Sem instanciação direta de dependências com `new` dentro de controllers
+- Sem segredos ou strings de conexão hardcoded nos arquivos `.cs`
+- Cache (`IMemoryCache`) deve ser invalidado em toda operação de escrita (POST, PUT, DELETE)
 
 ## Formato do relatório
 

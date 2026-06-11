@@ -1,10 +1,10 @@
 ---
 name: setup-project
-description: Guia o desenvolvedor nos passos iniciais ao clonar o template para um novo projeto. Use quando o usuário quiser iniciar um novo projeto a partir deste template.
+description: Guia o desenvolvedor nos passos iniciais ao clonar o TodoApi para um novo projeto. Use quando o usuário quiser iniciar um novo projeto a partir deste template.
 argument-hint: [nome do novo projeto]
 ---
 
-Você irá guiar o desenvolvedor na configuração inicial do projeto a partir deste template.
+Você irá guiar o desenvolvedor na configuração inicial do projeto.
 
 ## Passos
 
@@ -16,52 +16,46 @@ Você irá guiar o desenvolvedor na configuração inicial do projeto a partir d
 
 ### 1. Repositório
 ```bash
-# Remover origin do template
 git remote remove origin
-
-# Adicionar o novo repositório
 git remote add origin {URL_DO_NOVO_REPOSITORIO}
-
-# Push inicial para a branch dev
-git push -u origin dev
+git push -u origin main
 ```
 
 ### 2. Renomear o projeto
-Renomeie todos os arquivos e referências de `TemplateAPI` para o nome do novo projeto:
-- Arquivos `.csproj`
+Renomeie todas as referências de `TodoApi` para o nome do novo projeto:
+- Arquivos `.csproj` e `.sln`
 - Namespaces nos arquivos `.cs`
-- Nome da solution `.slnx`
 - Referências em `Program.cs`
-- Referências em `appsettings.json`
 
-Use busca e substituição global: `TemplateAPI` → `{NomeDoProjeto}`
+Use busca e substituição global: `TodoApi` → `{NomeDoProjeto}`
 
-### 3. Configurar variáveis de ambiente
-Edite `appsettings.json` e `appsettings.Development.json` com os valores reais:
+### 3. Configurar JWT
+Edite `appsettings.json` com os valores reais:
 
 | Variável | Descrição |
 |----------|-----------|
-| `RedisCacheSettings.ConnectionString` | String de conexão do Redis |
-| `RedisCacheSettings.ReaderEndPoint` | Endpoint de leitura do Redis |
-| `SmtpSettings.*` | Configurações de e-mail via AWS SES |
-| `CorsSettings.Origin` | Origens permitidas pelo CORS |
+| `Jwt:Key` | Chave secreta para assinar os tokens (mínimo 32 caracteres) |
+| `Jwt:Issuer` | Identificador do emissor do token |
+| `Jwt:Audience` | Identificador do público-alvo do token |
 
-### 4. Cognito (autenticação)
-Configure as variáveis do Amazon Cognito no `appsettings.json`. Se não for usar autenticação JWT, comente o bloco `CognitoInstaller` em `Program.cs`.
+> ⚠️ Nunca commite a `Jwt:Key` com valor real — use variáveis de ambiente ou `dotnet user-secrets` em desenvolvimento.
 
-### 5. Redis (cache)
-Se não for usar cache, altere `RedisCacheSettings.Enabled` para `false` em `appsettings.json`.
+### 4. Banco de dados
+O projeto usa `InMemoryDatabase` por padrão. Para trocar para um banco real:
+1. Adicione o pacote do provider desejado (ex: `Microsoft.EntityFrameworkCore.SqlServer`)
+2. Substitua `opt.UseInMemoryDatabase(...)` em `Program.cs` pela string de conexão
+3. Execute `dotnet ef migrations add InitialCreate` e `dotnet ef database update`
 
-### 6. Verificar a aplicação
+### 5. Verificar a aplicação
 ```bash
 dotnet build
 dotnet test
-dotnet run --project TemplateAPI.API
+dotnet run --project TodoApi/TodoApi
 ```
-Acesse o Swagger em `https://localhost:{porta}/swagger` para confirmar que está funcionando.
+Acesse o Swagger em `https://localhost:{porta}/swagger`.
 
 ## Regras
 
 - Execute cada etapa na ordem e confirme o sucesso antes de prosseguir
-- Alerte se encontrar arquivos `.env` ou segredos hardcoded
+- Alerte se encontrar arquivos com segredos hardcoded
 - Informe ao final quais configurações ainda precisam ser preenchidas

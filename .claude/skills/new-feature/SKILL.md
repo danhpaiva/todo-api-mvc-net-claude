@@ -1,10 +1,10 @@
 ---
 name: new-feature
-description: Cria o esqueleto completo de uma nova feature seguindo a arquitetura do projeto: entidade, interface do serviço, implementação do serviço, controller e registro de DI. Use quando o usuário pedir para criar uma nova funcionalidade do zero.
+description: Cria o esqueleto completo de uma nova feature no TodoApi: entidade, DTO, DbSet e controller com CRUD básico. Use quando o usuário pedir para criar uma nova funcionalidade do zero.
 argument-hint: <NomeDaFeature>
 ---
 
-Você irá criar todos os arquivos necessários para uma nova feature completa, orquestrando as demais skills do projeto.
+Você irá criar todos os arquivos necessários para uma nova feature completa.
 
 ## Entrada
 
@@ -12,132 +12,143 @@ O nome da feature é: **$ARGUMENTS**
 
 Se $ARGUMENTS não for fornecido, pergunte o nome antes de prosseguir.
 
-Use o nome fornecido para derivar:
-- **NomeDaEntidade**: PascalCase singular (ex: `Produto`)
-- **NomeDoServico**: `{NomeDaEntidade}Servico`
-- **NomeDoController**: `{NomeDaEntidade}Controller`
-- **nomeCamelCase**: camelCase do nome (ex: `produto`)
+Use o nome para derivar:
+- **NomeDaEntidade**: PascalCase singular (ex: `Categoria`)
+- **NomeDoController**: `{NomeDaEntidade}sController` (ex: `CategoriasController`)
+- **nomePlural**: plural para rota e DbSet (ex: `categorias`, `Categorias`)
 
 ---
 
-## Passo 1 — Criar a entidade
+## Passo 1 — Criar entidade e DTO
 
 Execute todos os passos da skill **new-entity** para `{NomeDaEntidade}`.
 
-Isso criará: `TemplateAPI.Entidades/Models/{NomeDaEntidade}.cs`
+Isso criará:
+- `TodoApi/Models/{NomeDaEntidade}.cs`
+- `TodoApi/Models/{NomeDaEntidade}DTO.cs`
+- DbSet em `TodoApi/Context/AppDbContext.cs`
 
 ---
 
-## Passo 2 — Criar a interface do serviço
+## Passo 2 — Criar o controller com CRUD
 
-Crie `TemplateAPI.Servico/Interface/I{NomeDoServico}.cs` seguindo o padrão de `IUsuarioServico.cs`:
-
-```csharp
-using TemplateAPI.Entidades.Models;
-
-namespace TemplateAPI.Servico.Interface
-{
-    public interface I{NomeDoServico}
-    {
-    }
-}
-```
-
-> Deixe a interface vazia por ora — os métodos serão adicionados via **new-endpoint** no passo 4.
-
----
-
-## Passo 3 — Criar a implementação do serviço
-
-Crie `TemplateAPI.Servico/Implementacao/{NomeDoServico}.cs` seguindo o padrão de `UsuarioServico.cs`:
-
-```csharp
-using TemplateAPI.Entidades.Models;
-using TemplateAPI.Servico.Interface;
-
-namespace TemplateAPI.Servico.Implementacao
-{
-    public class {NomeDoServico} : I{NomeDoServico}
-    {
-        public {NomeDoServico}()
-        {
-        }
-    }
-}
-```
-
-> Deixe a implementação vazia por ora — os métodos serão adicionados via **new-endpoint** no passo 4.
-
----
-
-## Passo 4 — Criar o shell do controller
-
-Crie `TemplateAPI.API/Controllers/{NomeDoController}.cs` seguindo o padrão de `UsuarioController.cs`:
+Crie `TodoApi/Controllers/{NomeDoController}.cs` seguindo o padrão de `TodoItemsController.cs`:
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
-using TemplateAPI.API.Controllers.Main;
-using TemplateAPI.Servico.Interface;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using TodoApi.Context;
+using TodoApi.Models;
 
-namespace TemplateAPI.API.Controllers
+namespace TodoApi.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
-    [Produces("application/json")]
-    public class {NomeDoController} : MainController
+    [ApiController]
+    public class {NomeDoController} : ControllerBase
     {
-        private readonly I{NomeDoServico} _{nomeCamelCase}Servico;
+        private readonly AppDbContext _context;
+        private readonly IMemoryCache _cache;
 
-        public {NomeDoController}(I{NomeDoServico} {nomeCamelCase}Servico, ILogger<{NomeDoController}> logger)
+        private const string AllCacheKey = "{nomePlural}_all";
+        private static string ItemCacheKey(long id) => $"{nomePlural}_{id}";
+
+        private static readonly MemoryCacheEntryOptions CacheOptions = new MemoryCacheEntryOptions()
+            .SetAbsoluteExpiration(TimeSpan.FromMinutes(5))
+            .SetSlidingExpiration(TimeSpan.FromMinutes(2));
+
+        public {NomeDoController}(AppDbContext context, IMemoryCache cache)
         {
-            _{nomeCamelCase}Servico = {nomeCamelCase}Servico;
-            _logger = logger;
+            _context = context;
+            _cache = cache;
         }
+
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<{NomeDaEntidade}DTO>>> GetAll()
+        {
+            if (_cache.TryGetValue(AllCacheKey, out IEnumerable<{NomeDaEntidade}DTO>? cached))
+                return Ok(cached);
+
+            var items = await _context.{DbSet}.Select(x => ItemToDTO(x)).ToListAsync();
+            _cache.Set(AllCacheKey, items, CacheOptions);
+            return Ok(items);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<{NomeDaEntidade}DTO>> GetById(long id)
+        {
+            if (_cache.TryGetValue(ItemCacheKey(id), out {NomeDaEntidade}DTO? cached))
+                return Ok(cached);
+
+            var item = await _context.{DbSet}.FindAsync(id);
+            if (item == null) return NotFound();
+
+            var dto = ItemToDTO(item);
+            _cache.Set(ItemCacheKey(id), dto, CacheOptions);
+            return Ok(dto);
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<{NomeDaEntidade}DTO>> Create({NomeDaEntidade}DTO dto)
+        {
+            var item = new {NomeDaEntidade} { /* mapear propriedades */ };
+            _context.{DbSet}.Add(item);
+            await _context.SaveChangesAsync();
+            _cache.Remove(AllCacheKey);
+            return CreatedAtAction(nameof(GetById), new { id = item.Id }, ItemToDTO(item));
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(long id, {NomeDaEntidade}DTO dto)
+        {
+            if (id != dto.Id) return BadRequest();
+            var item = await _context.{DbSet}.FindAsync(id);
+            if (item == null) return NotFound();
+
+            // mapear propriedades do dto para item
+
+            await _context.SaveChangesAsync();
+            _cache.Remove(ItemCacheKey(id));
+            _cache.Remove(AllCacheKey);
+            return NoContent();
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(long id)
+        {
+            var item = await _context.{DbSet}.FindAsync(id);
+            if (item == null) return NotFound();
+
+            _context.{DbSet}.Remove(item);
+            await _context.SaveChangesAsync();
+            _cache.Remove(ItemCacheKey(id));
+            _cache.Remove(AllCacheKey);
+            return NoContent();
+        }
+
+        private static {NomeDaEntidade}DTO ItemToDTO({NomeDaEntidade} item) =>
+            new {NomeDaEntidade}DTO { Id = item.Id /* mapear demais propriedades */ };
     }
 }
 ```
 
 ---
 
-## Passo 5 — Registrar o serviço no DI
-
-Leia o método `AdicionandoServicos` em `TemplateAPI.API/Program.cs` e adicione:
-
-```csharp
-builder.Services.AddScoped<I{NomeDoServico}, {NomeDoServico}>();
-```
-
----
-
-## Passo 6 — Adicionar o endpoint GET inicial
-
-Execute todos os passos da skill **new-endpoint** com os argumentos:
-
-> `{NomeDoController} GET Obter{NomeDaEntidade}`
-
-Isso adicionará o método `GetAsync` ao controller e o método correspondente na interface e implementação do serviço.
-
----
-
-## Passo 7 — Gerar os testes unitários
+## Passo 3 — Gerar os testes
 
 Execute todos os passos da skill **generate-tests** para `{NomeDaFeature}`.
-
-Isso criará os testes unitários do serviço e do controller em `TemplateAPI.Teste/`.
 
 ---
 
 ## Regras
 
-- Mantenha `PascalCase` para classes, métodos e propriedades
-- Campos privados com prefixo `_camelCase`
-- Todo método de serviço deve ser `async` e aceitar `CancellationToken?`
-- Controller não deve ter lógica de negócio
-- Sempre registre o serviço no DI em `Program.cs`
+- Sempre use `IMemoryCache` no controller
+- Nunca exponha entidades EF diretamente — use DTOs
+- Invalide o cache em toda operação de escrita
+- Preencha os mapeamentos `ItemToDTO` e `Create`/`Update` com as propriedades reais da entidade
 
 ## Ao concluir
 
 Liste todos os arquivos criados/modificados e lembre o desenvolvedor de:
-1. Adicionar as propriedades reais na entidade
-2. Implementar a lógica de negócio nos métodos `TODO` do serviço
-3. Ajustar os testes gerados conforme a implementação real do serviço
+1. Adicionar as propriedades reais na entidade e no DTO
+2. Preencher os mapeamentos no controller marcados com comentários

@@ -1,209 +1,110 @@
 ---
 name: generate-tests
-description: Gera testes unitários completos para um controller e seu serviço correspondente, cobrindo todos os endpoints. Use quando o usuário pedir para criar ou gerar testes de uma feature.
-argument-hint: <NomeDaFeature>
+description: Gera testes unitários para um controller do TodoApi, cobrindo todos os endpoints. Use quando o usuário pedir para criar ou gerar testes de uma feature.
+argument-hint: <NomeDoController>
 ---
 
-Você irá gerar testes unitários para o controller e o serviço de uma feature.
+Você irá gerar testes unitários para um controller.
 
 ## Entrada
 
-O nome da feature é: **$ARGUMENTS**
+O nome do controller é: **$ARGUMENTS**
 
 Se $ARGUMENTS não for fornecido, pergunte o nome antes de prosseguir.
 
-Derive os nomes:
-- **NomeDaEntidade**: PascalCase singular (ex: `Produto`)
-- **NomeDoServico**: `{NomeDaEntidade}Servico`
-- **NomeDoController**: `{NomeDaEntidade}Controller`
-- **nomeCamelCase**: camelCase do nome (ex: `produto`)
+Derive:
+- **NomeDoController**: `{Nome}sController` (ex: `TodoItemsController`)
+- **NomeDaEntidade**: singular sem sufixo (ex: `TodoItem`)
+- **NomeDaEntidadeDTO**: `{NomeDaEntidade}DTO`
 
 ## Passos
 
-### 1. Leitura dos arquivos-fonte
+### 1. Ler o controller-fonte
 
-Leia os seguintes arquivos para entender o que testar:
+Leia `TodoApi/Controllers/{NomeDoController}.cs` para entender:
+- Quais dependências são injetadas (sempre haverá `AppDbContext` e `IMemoryCache`)
+- Quais endpoints existem e quais status HTTP cada um retorna
 
-- `TemplateAPI.API/Controllers/{NomeDoController}.cs` — endpoints existentes
-- `TemplateAPI.Servico/Interface/I{NomeDoServico}.cs` — contrato do serviço
-- `TemplateAPI.Servico/Implementacao/{NomeDoServico}.cs` — implementação e dependências injetadas
+### 2. Verificar o projeto de testes
 
-### 2. Verificar e configurar o projeto de testes
+Verifique se `TodoApi.Tests/Controllers/` existe. Se não existir, crie a pasta.
 
-Leia `TemplateAPI.Teste/TemplateAPI.Teste.csproj`. Se o pacote `Moq` **não** estiver presente, adicione-o:
-
+Confirme que `TodoApi.Tests/TodoApi.Tests.csproj` tem referência ao projeto principal:
 ```xml
-<PackageReference Include="Moq" Version="4.20.72" />
+<ProjectReference Include="..\TodoApi\TodoApi.csproj" />
 ```
 
-Verifique também se a referência ao projeto `TemplateAPI.Servico` e `TemplateAPI.API` estão presentes no `.csproj`. Se não estiverem, adicione:
+### 3. Gerar o arquivo de testes
 
-```xml
-<ItemGroup>
-  <ProjectReference Include="..\TemplateAPI.Servico\TemplateAPI.Servico.csproj" />
-  <ProjectReference Include="..\TemplateAPI.API\TemplateAPI.API.csproj" />
-  <ProjectReference Include="..\TemplateAPI.Entidades\TemplateAPI.Entidades.csproj" />
-</ItemGroup>
-```
+Crie `TodoApi.Tests/Controllers/{NomeDoController}Tests.cs` seguindo o padrão abaixo.
 
-### 3. Gerar testes do serviço — `TemplateAPI.Teste/Servicos/{NomeDoServico}Tests.cs`
-
-- Identifique todas as dependências do construtor do serviço (ex: `IDatabaseApi`, `IEmail`, etc.)
-- Crie um mock para cada dependência usando `Mock<T>`
-- Para cada método público da interface, gere ao menos dois cenários:
-  - **Caminho feliz**: entrada válida, retorno esperado
-  - **Caminho de erro**: entrada inválida ou exceção esperada
-
-Padrão do arquivo:
-
-```csharp
-using Moq;
-using TemplateAPI.Entidades.Models;
-using TemplateAPI.Servico.Implementacao;
-// adicionar usings das interfaces mockadas conforme as dependências reais
-
-namespace TemplateAPI.Teste.Servicos
-{
-    public class {NomeDoServico}Tests
-    {
-        // Declare um Mock<T> para cada dependência do construtor
-        // private readonly Mock<IDependencia> _dependenciaMock;
-        private readonly {NomeDoServico} _servico;
-
-        public {NomeDoServico}Tests()
-        {
-            // _dependenciaMock = new Mock<IDependencia>();
-            _servico = new {NomeDoServico}(/* passar _dependenciaMock.Object conforme necessário */);
-        }
-
-        // Para cada método da interface, gere os cenários abaixo:
-
-        [Fact]
-        public async Task {NomeDoMetodo}_Com{CondicaoValida}_Deve{RetornoEsperado}()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            // configurar mocks conforme a implementação real
-
-            // Act
-            var resultado = await _servico.{NomeDoMetodo}(id);
-
-            // Assert
-            Assert.NotNull(resultado);
-        }
-
-        [Fact]
-        public async Task {NomeDoMetodo}_Com{CondicaoInvalida}_Deve{ExcecaoOuComportamentoEsperado}()
-        {
-            // Arrange
-            // ...
-
-            // Act & Assert
-            await Assert.ThrowsAsync<{TipoDeExcecao}>(
-                () => _servico.{NomeDoMetodo}(/* entrada inválida */));
-        }
-    }
-}
-```
-
-### 4. Gerar testes do controller — `TemplateAPI.Teste/Controllers/{NomeDoController}Tests.cs`
-
-- Mock da interface do serviço (`Mock<I{NomeDoServico}>`)
-- Para cada action do controller, gere ao menos três cenários:
-  - **Retorno 200 OK**: serviço retorna dado válido
-  - **Retorno 204 No Content**: serviço retorna `null`
-  - **Retorno 400 Bad Request**: serviço lança exceção
-
-Padrão do arquivo:
+**Padrão de setup** (baseado em `TodoItemsControllerTests.cs`):
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Moq;
-using TemplateAPI.API.Controllers;
-using TemplateAPI.Entidades.Models;
-using TemplateAPI.Servico.Interface;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using TodoApi.Context;
+using TodoApi.Controllers;
+using TodoApi.Models;
 
-namespace TemplateAPI.Teste.Controllers
+namespace TodoApi.Tests.Controllers;
+
+public class {NomeDoController}Tests
 {
-    public class {NomeDoController}Tests
+    private AppDbContext GetInMemoryDbContext()
     {
-        private readonly Mock<I{NomeDoServico}> _{nomeCamelCase}ServicoMock;
-        private readonly Mock<ILogger<{NomeDoController}>> _loggerMock;
-        private readonly {NomeDoController} _controller;
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        return new AppDbContext(options);
+    }
 
-        public {NomeDoController}Tests()
-        {
-            _{nomeCamelCase}ServicoMock = new Mock<I{NomeDoServico}>();
-            _loggerMock = new Mock<ILogger<{NomeDoController}>>();
-            _controller = new {NomeDoController}(_{nomeCamelCase}ServicoMock.Object, _loggerMock.Object);
-        }
+    private IMemoryCache GetMemoryCache() =>
+        new MemoryCache(new MemoryCacheOptions());
 
-        // Repita o bloco abaixo para cada action do controller:
+    // Para cada endpoint do controller, gere os cenários abaixo:
 
-        [Fact]
-        public async Task {NomeDoEndpoint}Async_QuandoServicoRetornaDado_DeveRetornarOk()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            var entidade = new {NomeDaEntidade} { Id = id };
-            _{nomeCamelCase}ServicoMock
-                .Setup(s => s.{NomeDoMetodoDoServico}(id, It.IsAny<CancellationToken?>()))
-                .ReturnsAsync(entidade);
+    [Fact]
+    public async Task {NomeDoEndpoint}_Quando{CondicaoValida}_Deve{RetornoEsperado}()
+    {
+        // Arrange
+        var context = GetInMemoryDbContext();
+        var cache = GetMemoryCache();
+        context.{DbSet}.Add(new {NomeDaEntidade} { Id = 1, /* propriedades */ });
+        await context.SaveChangesAsync();
+        var controller = new {NomeDoController}(context, cache);
 
-            // Act
-            var resultado = await _controller.{NomeDoEndpoint}Async(id, CancellationToken.None);
+        // Act
+        var result = await controller.{NomeDoEndpoint}(/* params */);
 
-            // Assert
-            var okResult = Assert.IsType<OkObjectResult>(resultado.Result);
-            var retorno = Assert.IsType<{NomeDaEntidade}>(okResult.Value);
-            Assert.Equal(id, retorno.Id);
-        }
-
-        [Fact]
-        public async Task {NomeDoEndpoint}Async_QuandoServicoRetornaNull_DeveRetornarOk()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            _{nomeCamelCase}ServicoMock
-                .Setup(s => s.{NomeDoMetodoDoServico}(id, It.IsAny<CancellationToken?>()))
-                .ReturnsAsync((({NomeDaEntidade}?)null));
-
-            // Act
-            var resultado = await _controller.{NomeDoEndpoint}Async(id, CancellationToken.None);
-
-            // Assert
-            var okResult = Assert.IsType<OkObjectResult>(resultado.Result);
-            Assert.Null(okResult.Value);
-        }
-
-        [Fact]
-        public async Task {NomeDoEndpoint}Async_QuandoServicoLancaExcecao_DeveRetornarBadRequest()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            _{nomeCamelCase}ServicoMock
-                .Setup(s => s.{NomeDoMetodoDoServico}(id, It.IsAny<CancellationToken?>()))
-                .ThrowsAsync(new Exception("Erro simulado"));
-
-            // Act
-            var resultado = await _controller.{NomeDoEndpoint}Async(id, CancellationToken.None);
-
-            // Assert
-            Assert.IsType<BadRequestObjectResult>(resultado.Result);
-        }
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<{NomeDaEntidadeDTO}>(okResult.Value);
+        Assert.Equal(1, dto.Id);
     }
 }
 ```
 
+**Cenários obrigatórios por tipo de endpoint:**
+
+| Endpoint | Cenários mínimos |
+|----------|-----------------|
+| GET (lista) | retorna lista com itens; retorna lista vazia |
+| GET (por id) | id válido → retorna DTO; id inválido → 404 |
+| POST | cria item → 201 CreatedAtAction com DTO |
+| PUT | id coincide + item existe → 204; ids diferentes → 400; item não existe → 404 |
+| DELETE | item existe → 204 + removido do banco; item não existe → 404 |
+
 ## Regras
 
-- Nomeie métodos de teste no padrão: `{Metodo}_{Condicao}_{ResultadoEsperado}`
-- Use `[Fact]` para casos determinísticos e `[Theory] + [InlineData]` para variações de entrada
-- Um teste por cenário — nunca valide duas coisas diferentes no mesmo `[Fact]`
-- Não instancie objetos reais de infraestrutura (banco, HTTP) — use sempre mocks
-- Crie a pasta `Servicos/` e `Controllers/` dentro de `TemplateAPI.Teste/` se não existirem
+- Um `[Fact]` por cenário — nunca valide duas coisas diferentes no mesmo teste
+- Sempre crie um novo `DbContext` e `MemoryCache` por teste (evita estado compartilhado)
+- Use `Guid.NewGuid().ToString()` como nome do banco InMemory para isolamento
+- Nomeie no padrão: `{Endpoint}_{Condicao}_{ResultadoEsperado}`
+- Use `[Theory] + [InlineData]` para variações de entrada (ex: ids inválidos)
+- Não use mocks para `AppDbContext` — use o InMemory provider do EF
 
 ## Ao concluir
 
-Liste os arquivos criados/modificados e informe quantos cenários de teste foram gerados por classe.
+Liste os arquivos criados/modificados e informe quantos cenários foram gerados por controller.

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using TodoApi.Context;
 using TodoApi.Controllers;
 using TodoApi.Models;
@@ -13,9 +14,11 @@ public class TodoItemsControllerTests
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(databaseName: System.Guid.NewGuid().ToString())
             .Options;
-        var context = new AppDbContext(options);
-        return context;
+        return new AppDbContext(options);
     }
+
+    private IMemoryCache GetMemoryCache() =>
+        new MemoryCache(new MemoryCacheOptions());
 
     [Fact]
     public async Task GetTodoItems_ReturnsListOfTodoItemDTOs()
@@ -26,7 +29,7 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 2, Name = "Test Item 2", IsComplete = true });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
 
         // Act
         var result = await controller.GetTodoItems();
@@ -47,7 +50,7 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 1, Name = "Test Item", IsComplete = false });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
 
         // Act
         var result = await controller.GetTodoItem(1);
@@ -65,7 +68,7 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
 
         // Act
         var result = await controller.GetTodoItem(99);
@@ -82,7 +85,7 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 1, Name = "Original Name", IsComplete = false });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
         var updatedTodoDTO = new TodoItemDTO { Id = 1, Name = "Updated Name", IsComplete = true };
 
         // Act
@@ -102,7 +105,7 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
         var todoDTO = new TodoItemDTO { Id = 1, Name = "Test", IsComplete = false };
 
         // Act
@@ -117,7 +120,7 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
         var todoDTO = new TodoItemDTO { Id = 1, Name = "Test", IsComplete = false };
 
         // Act
@@ -132,7 +135,7 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
         var newTodoDTO = new TodoItemDTO { Name = "New Item", IsComplete = false };
 
         // Act
@@ -159,7 +162,7 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 1, Name = "Item to Delete", IsComplete = false });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context);
+        var controller = new TodoItemsController(context, GetMemoryCache());
 
         // Act
         var result = await controller.DeleteTodoItem(1);
@@ -173,13 +176,3 @@ public class TodoItemsControllerTests
     public async Task DeleteTodoItem_WhenItemNotFound_ReturnsNotFound()
     {
         // Arrange
-        var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context);
-
-        // Act
-        var result = await controller.DeleteTodoItem(99);
-
-        // Assert
-        Assert.IsType<NotFoundResult>(result);
-    }
-}
