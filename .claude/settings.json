@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$changed = git status --porcelain 2>$null | Where-Object { $_ -match '\\.(cs|csproj|slnx)$' }; if (-not $changed) { exit 0 }; if (-not (dotnet tool list -g 2>$null | Select-String 'dotnet-sonarscanner')) { dotnet tool install --global dotnet-sonarscanner | Out-Null }; $token = $env:SONAR_TOKEN; if (-not $token) { Write-Error 'SONAR_TOKEN nao definido'; exit 1 }; dotnet sonarscanner begin /k:'YOUR_PROJECT_KEY' /o:'YOUR_ORGANIZATION' \"/d:sonar.token=$token\" '/d:sonar.host.url=https://sonarcloud.io'; dotnet build TemplateAPI.slnx; dotnet sonarscanner end \"/d:sonar.token=$token\"",
+            "timeout": 300,
+            "statusMessage": "Executando análise SonarCloud...",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
