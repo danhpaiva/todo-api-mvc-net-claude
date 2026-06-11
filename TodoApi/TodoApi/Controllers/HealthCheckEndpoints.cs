@@ -10,19 +10,24 @@ namespace TodoApi.Controllers
     public class HealthController : ControllerBase
     {
         private readonly HealthCheckService _healthCheckService;
+        private readonly ILogger<HealthController> _logger;
 
-        public HealthController(HealthCheckService healthCheckService)
+        public HealthController(HealthCheckService healthCheckService, ILogger<HealthController> logger)
         {
             _healthCheckService = healthCheckService;
+            _logger = logger;
         }
 
         /// <summary>Retorna o status de saúde da API e suas dependências.</summary>
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-        public async Task<IActionResult> Get()
+        public async Task<IActionResult> Get(CancellationToken cancellationToken)
         {
-            var report = await _healthCheckService.CheckHealthAsync();
+            var report = await _healthCheckService.CheckHealthAsync(cancellationToken: cancellationToken);
+
+            if (report.Status != HealthStatus.Healthy)
+                _logger.LogWarning("Health check degradado: {Status}.", report.Status);
 
             var result = new
             {

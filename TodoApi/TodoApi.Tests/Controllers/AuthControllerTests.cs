@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using TodoApi.Controllers;
 using TodoApi.Models;
 
@@ -27,7 +28,7 @@ public class AuthControllerTests
     {
         // Arrange
         var configuration = GetMockConfiguration();
-        var controller = new AuthController(configuration);
+        var controller = new AuthController(configuration, NullLogger<AuthController>.Instance);
         var login = new Login { Username = "admin", Password = "senhaforte" };
 
         // Act
@@ -56,7 +57,7 @@ public class AuthControllerTests
     {
         // Arrange
         var configuration = GetMockConfiguration();
-        var controller = new AuthController(configuration);
+        var controller = new AuthController(configuration, NullLogger<AuthController>.Instance);
         var login = new Login { Username = "invalid", Password = "wrongpassword" };
 
         // Act
@@ -72,7 +73,7 @@ public class AuthControllerTests
     {
         // Arrange
         var configuration = GetMockConfiguration();
-        var controller = new AuthController(configuration);
+        var controller = new AuthController(configuration, NullLogger<AuthController>.Instance);
         var login = new Login { Username = "admin", Password = "wrongpassword" };
 
         // Act
@@ -88,7 +89,7 @@ public class AuthControllerTests
     {
         // Arrange
         var configuration = GetMockConfiguration();
-        var controller = new AuthController(configuration);
+        var controller = new AuthController(configuration, NullLogger<AuthController>.Instance);
         var login = new Login { Username = "wronguser", Password = "senhaforte" };
 
         // Act

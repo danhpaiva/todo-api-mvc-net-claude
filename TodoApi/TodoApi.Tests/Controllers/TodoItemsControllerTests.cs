@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using TodoApi.Context;
 using TodoApi.Controllers;
 using TodoApi.Models;
@@ -12,13 +13,13 @@ public class TodoItemsControllerTests
     private AppDbContext GetInMemoryDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: System.Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         return new AppDbContext(options);
     }
 
-    private IMemoryCache GetMemoryCache() =>
-        new MemoryCache(new MemoryCacheOptions());
+    private TodoItemsController BuildController(AppDbContext context) =>
+        new(context, new MemoryCache(new MemoryCacheOptions()), NullLogger<TodoItemsController>.Instance);
 
     [Fact]
     public async Task GetTodoItems_ReturnsListOfTodoItemDTOs()
@@ -29,14 +30,14 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 2, Name = "Test Item 2", IsComplete = true });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
 
         // Act
-        var result = await controller.GetTodoItems();
+        var result = await controller.GetTodoItems(CancellationToken.None);
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<IEnumerable<TodoItemDTO>>>(result);
-        var todoItems = Assert.IsAssignableFrom<IEnumerable<TodoItemDTO>>(actionResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var todoItems = Assert.IsAssignableFrom<IEnumerable<TodoItemDTO>>(okResult.Value);
         Assert.Equal(2, todoItems.Count());
         Assert.Contains(todoItems, i => i.Name == "Test Item 1");
         Assert.Contains(todoItems, i => i.Name == "Test Item 2");
@@ -50,14 +51,14 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 1, Name = "Test Item", IsComplete = false });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
 
         // Act
-        var result = await controller.GetTodoItem(1);
+        var result = await controller.GetTodoItem(1, CancellationToken.None);
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<TodoItemDTO>>(result);
-        var todoItem = Assert.IsType<TodoItemDTO>(actionResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var todoItem = Assert.IsType<TodoItemDTO>(okResult.Value);
         Assert.Equal(1, todoItem.Id);
         Assert.Equal("Test Item", todoItem.Name);
         Assert.False(todoItem.IsComplete);
@@ -68,10 +69,10 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
 
         // Act
-        var result = await controller.GetTodoItem(99);
+        var result = await controller.GetTodoItem(99, CancellationToken.None);
 
         // Assert
         Assert.IsType<NotFoundResult>(result.Result);
@@ -85,16 +86,16 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 1, Name = "Original Name", IsComplete = false });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
         var updatedTodoDTO = new TodoItemDTO { Id = 1, Name = "Updated Name", IsComplete = true };
 
         // Act
-        var result = await controller.PutTodoItem(1, updatedTodoDTO);
+        var result = await controller.PutTodoItem(1, updatedTodoDTO, CancellationToken.None);
 
         // Assert
         Assert.IsType<NoContentResult>(result);
 
-        var updatedItem = await context.TodoItems.FindAsync(1L); // Use L for long
+        var updatedItem = await context.TodoItems.FindAsync(1L);
         Assert.NotNull(updatedItem);
         Assert.Equal("Updated Name", updatedItem.Name);
         Assert.True(updatedItem.IsComplete);
@@ -105,11 +106,11 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
         var todoDTO = new TodoItemDTO { Id = 1, Name = "Test", IsComplete = false };
 
         // Act
-        var result = await controller.PutTodoItem(2, todoDTO);
+        var result = await controller.PutTodoItem(2, todoDTO, CancellationToken.None);
 
         // Assert
         Assert.IsType<BadRequestResult>(result);
@@ -120,11 +121,11 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
         var todoDTO = new TodoItemDTO { Id = 1, Name = "Test", IsComplete = false };
 
         // Act
-        var result = await controller.PutTodoItem(1, todoDTO);
+        var result = await controller.PutTodoItem(1, todoDTO, CancellationToken.None);
 
         // Assert
         Assert.IsType<NotFoundResult>(result);
@@ -135,18 +136,17 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
         var newTodoDTO = new TodoItemDTO { Name = "New Item", IsComplete = false };
 
         // Act
-        var result = await controller.PostTodoItem(newTodoDTO);
+        var result = await controller.PostTodoItem(newTodoDTO, CancellationToken.None);
 
         // Assert
         var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(result.Result);
         var todoItemDTO = Assert.IsType<TodoItemDTO>(createdAtActionResult.Value);
 
         Assert.Equal("GetTodoItem", createdAtActionResult.ActionName);
-        Assert.NotNull(todoItemDTO.Id); // ID should be generated by the database
         Assert.Equal("New Item", todoItemDTO.Name);
         Assert.False(todoItemDTO.IsComplete);
 
@@ -162,10 +162,10 @@ public class TodoItemsControllerTests
         context.TodoItems.Add(new TodoItem { Id = 1, Name = "Item to Delete", IsComplete = false });
         await context.SaveChangesAsync();
 
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
 
         // Act
-        var result = await controller.DeleteTodoItem(1);
+        var result = await controller.DeleteTodoItem(1, CancellationToken.None);
 
         // Assert
         Assert.IsType<NoContentResult>(result);
@@ -177,10 +177,10 @@ public class TodoItemsControllerTests
     {
         // Arrange
         var context = GetInMemoryDbContext();
-        var controller = new TodoItemsController(context, GetMemoryCache());
+        var controller = BuildController(context);
 
         // Act
-        var result = await controller.DeleteTodoItem(99);
+        var result = await controller.DeleteTodoItem(99, CancellationToken.None);
 
         // Assert
         Assert.IsType<NotFoundResult>(result);
