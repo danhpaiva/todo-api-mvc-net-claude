@@ -176,3 +176,13 @@ public class TodoItemsControllerTests
     public async Task DeleteTodoItem_WhenItemNotFound_ReturnsNotFound()
     {
         // Arrange
+        var context = GetInMemoryDbContext();
+        var controller = new TodoItemsController(context, GetMemoryCache());
+
+        // Act
+        var result = await controller.DeleteTodoItem(99);
+
+        // Assert
+        Assert.IsType<NotFoundResult>(result);
+    }
+}
