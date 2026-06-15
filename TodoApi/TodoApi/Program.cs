@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TodoApi.Context;
+using TodoApi.Repositories;
+using TodoApi.Repositories.Interfaces;
 using TodoApi.Services;
 using TodoApi.Services.Interfaces;
 
@@ -44,6 +46,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddMemoryCache();
 
+builder.Services.AddScoped<ITodoRepository, TodoRepository>();
 builder.Services.AddScoped<ITodoService, TodoService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 

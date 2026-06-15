@@ -1,14 +1,13 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using TodoApi.Context;
 using TodoApi.Models;
+using TodoApi.Repositories.Interfaces;
 using TodoApi.Services.Interfaces;
 
 namespace TodoApi.Services;
 
 public class TodoService : ITodoService
 {
-    private readonly AppDbContext _context;
+    private readonly ITodoRepository _repository;
     private readonly IMemoryCache _cache;
     private readonly ILogger<TodoService> _logger;
 
@@ -19,9 +18,9 @@ public class TodoService : ITodoService
         .SetAbsoluteExpiration(TimeSpan.FromMinutes(5))
         .SetSlidingExpiration(TimeSpan.FromMinutes(2));
 
-    public TodoService(AppDbContext context, IMemoryCache cache, ILogger<TodoService> logger)
+    public TodoService(ITodoRepository repository, IMemoryCache cache, ILogger<TodoService> logger)
     {
-        _context = context;
+        _repository = repository;
         _cache = cache;
         _logger = logger;
     }
@@ -34,13 +33,12 @@ public class TodoService : ITodoService
             return cached!;
         }
 
-        var items = await _context.TodoItems
-            .Select(x => ToDTO(x))
-            .ToListAsync(cancellationToken);
+        var items = await _repository.GetAllAsync(cancellationToken);
+        var dtos = items.Select(ToDTO).ToList();
 
-        _cache.Set(AllTodosCacheKey, items, CacheOptions);
+        _cache.Set(AllTodosCacheKey, dtos, CacheOptions);
 
-        return items;
+        return dtos;
     }
 
     public async Task<TodoItemDTO?> GetByIdAsync(long id, CancellationToken cancellationToken)
@@ -51,9 +49,9 @@ public class TodoService : ITodoService
             return cached;
         }
 
-        var item = await _context.TodoItems.FindAsync([id], cancellationToken);
+        var item = await _repository.GetByIdAsync(id, cancellationToken);
 
-        if (item == null)
+        if (item is null)
         {
             _logger.LogWarning("Todo {Id} não encontrado.", id);
             return null;
@@ -73,21 +71,20 @@ public class TodoService : ITodoService
             IsComplete = dto.IsComplete
         };
 
-        _context.TodoItems.Add(item);
-        await _context.SaveChangesAsync(cancellationToken);
+        var created = await _repository.CreateAsync(item, cancellationToken);
 
         _cache.Remove(AllTodosCacheKey);
 
-        _logger.LogInformation("Todo {Id} criado.", item.Id);
+        _logger.LogInformation("Todo {Id} criado.", created.Id);
 
-        return ToDTO(item);
+        return ToDTO(created);
     }
 
     public async Task<bool> UpdateAsync(long id, TodoItemDTO dto, CancellationToken cancellationToken)
     {
-        var item = await _context.TodoItems.FindAsync([id], cancellationToken);
+        var item = await _repository.GetByIdAsync(id, cancellationToken);
 
-        if (item == null)
+        if (item is null)
         {
             _logger.LogWarning("Tentativa de atualizar todo {Id} inexistente.", id);
             return false;
@@ -96,42 +93,34 @@ public class TodoService : ITodoService
         item.Name = dto.Name;
         item.IsComplete = dto.IsComplete;
 
-        try
+        var updated = await _repository.UpdateAsync(item, cancellationToken);
+
+        if (updated)
         {
-            await _context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException) when (!_context.TodoItems.Any(e => e.Id == id))
-        {
-            return false;
+            _cache.Remove(TodoCacheKey(id));
+            _cache.Remove(AllTodosCacheKey);
+            _logger.LogInformation("Todo {Id} atualizado.", id);
         }
 
-        _cache.Remove(TodoCacheKey(id));
-        _cache.Remove(AllTodosCacheKey);
-
-        _logger.LogInformation("Todo {Id} atualizado.", id);
-
-        return true;
+        return updated;
     }
 
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken)
     {
-        var item = await _context.TodoItems.FindAsync([id], cancellationToken);
+        var deleted = await _repository.DeleteAsync(id, cancellationToken);
 
-        if (item == null)
+        if (deleted)
+        {
+            _cache.Remove(TodoCacheKey(id));
+            _cache.Remove(AllTodosCacheKey);
+            _logger.LogInformation("Todo {Id} deletado.", id);
+        }
+        else
         {
             _logger.LogWarning("Tentativa de deletar todo {Id} inexistente.", id);
-            return false;
         }
 
-        _context.TodoItems.Remove(item);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        _cache.Remove(TodoCacheKey(id));
-        _cache.Remove(AllTodosCacheKey);
-
-        _logger.LogInformation("Todo {Id} deletado.", id);
-
-        return true;
+        return deleted;
     }
 
     private static TodoItemDTO ToDTO(TodoItem item) => new()
