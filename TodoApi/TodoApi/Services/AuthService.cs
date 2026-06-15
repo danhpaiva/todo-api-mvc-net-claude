@@ -20,7 +20,10 @@ public class AuthService : IAuthService
 
     public string? GenerateToken(Login login)
     {
-        if (login.Username != "admin" || login.Password != "senhaforte")
+        var expectedUsername = _configuration["Auth:Username"];
+        var expectedPassword = _configuration["Auth:Password"];
+
+        if (login.Username != expectedUsername || login.Password != expectedPassword)
         {
             _logger.LogWarning("Tentativa de login inválida para o usuário {Username}.", login.Username);
             return null;
