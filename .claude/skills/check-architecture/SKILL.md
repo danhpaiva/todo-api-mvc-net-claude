@@ -16,23 +16,32 @@ Você irá verificar se o projeto respeita a arquitetura definida para o `TodoAp
 
 ```
 TodoApi/
-  Controllers/   — orquestração HTTP, validação de entrada, respostas
-  Context/       — AppDbContext e configuração do EF Core
-  Models/        — entidades, DTOs e modelos de entrada
-  Program.cs     — registro de DI e pipeline de middlewares
+  Controllers/         — orquestração HTTP, validação de entrada, respostas
+  Context/             — AppDbContext e configuração do EF Core
+  Models/              — entidades, DTOs e modelos de entrada
+  Services/            — lógica de negócio, cache, orquestração de dados
+    Interfaces/        — contratos de serviço (I*Service)
+  Program.cs           — registro de DI e pipeline de middlewares
 TodoApi.Tests/
-  Controllers/   — testes unitários dos controllers
+  Controllers/         — testes unitários dos controllers
 ```
 
 ## Regras a verificar
 
 ### Controllers (`TodoApi/Controllers/`)
-- Apenas orquestração HTTP: receber request, chamar contexto/serviço, retornar response
+- Apenas orquestração HTTP: receber request, chamar serviço, retornar response
 - Não devem conter lógica de negócio complexa (cálculos, regras de domínio, transformações pesadas)
-- Devem injetar dependências via construtor (`AppDbContext`, `IMemoryCache`, etc.)
+- Devem injetar interfaces de serviço via construtor (`ITodoService`, `IAuthService`, etc.) — não `AppDbContext` diretamente
 - Não devem instanciar dependências com `new` (ex: `new AppDbContext(...)`)
 - Devem ter `[Route]` e verbos HTTP explícitos em cada action
 - Retornar `ActionResult<T>` ou `IActionResult`
+
+### Services (`TodoApi/Services/`)
+- Contém a lógica de negócio, queries ao banco e manipulação de cache
+- Cada serviço deve implementar sua interface correspondente em `Services/Interfaces/`
+- Interfaces (`I*Service`) devem ficar em `Services/Interfaces/`
+- Não devem retornar tipos de infraestrutura (`IQueryable`, `DbSet`) — retornar DTOs ou entidades mapeadas
+- Cache (`IMemoryCache`) deve ser gerenciado aqui, não nos controllers
 
 ### Context (`TodoApi/Context/`)
 - Apenas `DbContext` e sua configuração (`DbSet`, `OnModelCreating`)
@@ -48,9 +57,10 @@ TodoApi.Tests/
 - Não deve conter lógica de negócio inline
 
 ### Boas práticas gerais
-- Sem instanciação direta de dependências com `new` dentro de controllers
+- Sem instanciação direta de dependências com `new` dentro de controllers ou serviços
 - Sem segredos ou strings de conexão hardcoded nos arquivos `.cs`
-- Cache (`IMemoryCache`) deve ser invalidado em toda operação de escrita (POST, PUT, DELETE)
+- Cache (`IMemoryCache`) deve ser gerenciado nos serviços e invalidado em toda operação de escrita (POST, PUT, DELETE)
+- Testes de controller devem mockar interfaces de serviço (`I*Service`), não dependências de infraestrutura (`AppDbContext`, `IMemoryCache`)
 
 ## Formato do relatório
 
