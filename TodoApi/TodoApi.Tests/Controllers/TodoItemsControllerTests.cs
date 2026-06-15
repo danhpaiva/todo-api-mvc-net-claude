@@ -13,20 +13,26 @@ public class TodoItemsControllerTests
     private TodoItemsController BuildController() => new(_serviceMock.Object);
 
     [Fact]
-    public async Task GetTodoItems_ReturnsListOfTodoItemDTOs()
+    public async Task GetTodoItems_ReturnsPagedResult()
     {
-        var items = new List<TodoItemDTO>
+        var paged = new PagedResult<TodoItemDTO>
         {
-            new() { Id = 1, Name = "Test Item 1", IsComplete = false },
-            new() { Id = 2, Name = "Test Item 2", IsComplete = true }
+            Items = [
+                new() { Id = 1, Name = "Test Item 1", IsComplete = false },
+                new() { Id = 2, Name = "Test Item 2", IsComplete = true }
+            ],
+            Page = 1,
+            PageSize = 10,
+            TotalCount = 2
         };
-        _serviceMock.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(items);
+        _serviceMock.Setup(s => s.GetAllAsync(1, 10, It.IsAny<CancellationToken>())).ReturnsAsync(paged);
 
-        var result = await BuildController().GetTodoItems(CancellationToken.None);
+        var result = await BuildController().GetTodoItems(1, 10, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returned = Assert.IsAssignableFrom<IEnumerable<TodoItemDTO>>(okResult.Value);
-        Assert.Equal(2, returned.Count());
+        var returned = Assert.IsType<PagedResult<TodoItemDTO>>(okResult.Value);
+        Assert.Equal(2, returned.TotalCount);
+        Assert.Equal(1, returned.Page);
     }
 
     [Fact]

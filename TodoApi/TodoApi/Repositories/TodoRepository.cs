@@ -14,8 +14,19 @@ public class TodoRepository : ITodoRepository
         _context = context;
     }
 
-    public async Task<IEnumerable<TodoItem>> GetAllAsync(CancellationToken cancellationToken)
-        => await _context.TodoItems.ToListAsync(cancellationToken);
+    public async Task<(IEnumerable<TodoItem> Items, int TotalCount)> GetPagedAsync(
+        int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var totalCount = await _context.TodoItems.CountAsync(cancellationToken);
+
+        var items = await _context.TodoItems
+            .OrderBy(x => x.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
 
     public async Task<TodoItem?> GetByIdAsync(long id, CancellationToken cancellationToken)
         => await _context.TodoItems.FindAsync([id], cancellationToken);
