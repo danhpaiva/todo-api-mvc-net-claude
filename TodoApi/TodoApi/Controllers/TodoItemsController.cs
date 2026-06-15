@@ -17,11 +17,17 @@ public class TodoItemsController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<TodoItemDTO>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<TodoItemDTO>>> GetTodoItems(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(PagedResult<TodoItemDTO>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResult<TodoItemDTO>>> GetTodoItems(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
-        var items = await _service.GetAllAsync(cancellationToken);
-        return Ok(items);
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 10;
+
+        var result = await _service.GetAllAsync(page, pageSize, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("{id}")]

@@ -11,7 +11,7 @@ public class TodoService : ITodoService
     private readonly IMemoryCache _cache;
     private readonly ILogger<TodoService> _logger;
 
-    private const string AllTodosCacheKey = "todos_all";
+    private static string PagedCacheKey(int page, int pageSize) => $"todos_p{page}_s{pageSize}";
     private static string TodoCacheKey(long id) => $"todo_{id}";
 
     private static readonly MemoryCacheEntryOptions CacheOptions = new MemoryCacheEntryOptions()
@@ -25,20 +25,29 @@ public class TodoService : ITodoService
         _logger = logger;
     }
 
-    public async Task<IEnumerable<TodoItemDTO>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<PagedResult<TodoItemDTO>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
-        if (_cache.TryGetValue(AllTodosCacheKey, out IEnumerable<TodoItemDTO>? cached))
+        var cacheKey = PagedCacheKey(page, pageSize);
+
+        if (_cache.TryGetValue(cacheKey, out PagedResult<TodoItemDTO>? cached))
         {
-            _logger.LogDebug("Cache hit para lista de todos.");
+            _logger.LogDebug("Cache hit para todos página {Page}.", page);
             return cached!;
         }
 
-        var items = await _repository.GetAllAsync(cancellationToken);
-        var dtos = items.Select(ToDTO).ToList();
+        var (items, totalCount) = await _repository.GetPagedAsync(page, pageSize, cancellationToken);
 
-        _cache.Set(AllTodosCacheKey, dtos, CacheOptions);
+        var result = new PagedResult<TodoItemDTO>
+        {
+            Items = items.Select(ToDTO).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
 
-        return dtos;
+        _cache.Set(cacheKey, result, CacheOptions);
+
+        return result;
     }
 
     public async Task<TodoItemDTO?> GetByIdAsync(long id, CancellationToken cancellationToken)
@@ -73,7 +82,7 @@ public class TodoService : ITodoService
 
         var created = await _repository.CreateAsync(item, cancellationToken);
 
-        _cache.Remove(AllTodosCacheKey);
+        InvalidateListCache();
 
         _logger.LogInformation("Todo {Id} criado.", created.Id);
 
@@ -98,7 +107,7 @@ public class TodoService : ITodoService
         if (updated)
         {
             _cache.Remove(TodoCacheKey(id));
-            _cache.Remove(AllTodosCacheKey);
+            InvalidateListCache();
             _logger.LogInformation("Todo {Id} atualizado.", id);
         }
 
@@ -112,7 +121,7 @@ public class TodoService : ITodoService
         if (deleted)
         {
             _cache.Remove(TodoCacheKey(id));
-            _cache.Remove(AllTodosCacheKey);
+            InvalidateListCache();
             _logger.LogInformation("Todo {Id} deletado.", id);
         }
         else
@@ -121,6 +130,14 @@ public class TodoService : ITodoService
         }
 
         return deleted;
+    }
+
+    private void InvalidateListCache()
+    {
+        // IMemoryCache não tem remoção por prefixo; usamos um token de cancelamento compartilhado
+        // para invalidar todas as entradas de paginação de uma vez.
+        if (_cache is MemoryCache mc)
+            mc.Compact(1.0);
     }
 
     private static TodoItemDTO ToDTO(TodoItem item) => new()

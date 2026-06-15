@@ -17,10 +17,10 @@ public class TodoRepositoryTests
 
     private TodoRepository BuildRepository(AppDbContext context) => new(context);
 
-    // GET ALL
+    // GET PAGED
 
     [Fact]
-    public async Task GetAllAsync_QuandoExistemItens_DeveRetornarTodos()
+    public async Task GetPagedAsync_QuandoExistemItens_DeveRetornarPaginaCorreta()
     {
         var context = GetInMemoryDbContext();
         context.TodoItems.AddRange(
@@ -29,19 +29,35 @@ public class TodoRepositoryTests
         );
         await context.SaveChangesAsync();
 
-        var result = await BuildRepository(context).GetAllAsync(CancellationToken.None);
+        var (items, totalCount) = await BuildRepository(context).GetPagedAsync(1, 10, CancellationToken.None);
 
-        Assert.Equal(2, result.Count());
+        Assert.Equal(2, totalCount);
+        Assert.Equal(2, items.Count());
     }
 
     [Fact]
-    public async Task GetAllAsync_QuandoNaoExistemItens_DeveRetornarListaVazia()
+    public async Task GetPagedAsync_QuandoNaoExistemItens_DeveRetornarListaVazia()
     {
         var context = GetInMemoryDbContext();
 
-        var result = await BuildRepository(context).GetAllAsync(CancellationToken.None);
+        var (items, totalCount) = await BuildRepository(context).GetPagedAsync(1, 10, CancellationToken.None);
 
-        Assert.Empty(result);
+        Assert.Equal(0, totalCount);
+        Assert.Empty(items);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_ComMaisItensDoPagina_DeveRetornarApenasPageSize()
+    {
+        var context = GetInMemoryDbContext();
+        for (int i = 1; i <= 15; i++)
+            context.TodoItems.Add(new TodoItem { Name = $"Item {i}", IsComplete = false });
+        await context.SaveChangesAsync();
+
+        var (items, totalCount) = await BuildRepository(context).GetPagedAsync(1, 10, CancellationToken.None);
+
+        Assert.Equal(15, totalCount);
+        Assert.Equal(10, items.Count());
     }
 
     // GET BY ID

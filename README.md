@@ -60,7 +60,7 @@ TodoApi/
 
 | Método | Rota                  | Descrição                  | Auth          |
 |--------|-----------------------|----------------------------|---------------|
-| GET    | /api/todoitems        | Lista todos os itens       | ❌            |
+| GET    | /api/todoitems        | Lista itens paginados (`?page=1&pageSize=10`) | ❌            |
 | GET    | /api/todoitems/{id}   | Retorna um item por ID     | ❌            |
 | POST   | /api/todoitems        | Cria um novo item          | ❌            |
 | PUT    | /api/todoitems/{id}   | Atualiza um item           | ❌            |

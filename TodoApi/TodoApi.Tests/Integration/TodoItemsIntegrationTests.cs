@@ -64,16 +64,40 @@ public class TodoItemsIntegrationTests : IClassFixture<IntegrationTestFactory>
     // GET /api/todoitems
 
     [Fact]
-    public async Task Get_RetornaListaComItensCriados()
+    public async Task Get_RetornaPagedResultComItensCriados()
     {
         await _client.PostAsJsonAsync("/api/todoitems", new { name = "Item GET A", isComplete = false });
         await _client.PostAsJsonAsync("/api/todoitems", new { name = "Item GET B", isComplete = true });
 
-        var response = await _client.GetAsync("/api/todoitems");
+        var response = await _client.GetAsync("/api/todoitems?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetArrayLength() >= 2);
+        Assert.True(body.GetProperty("totalCount").GetInt32() >= 2);
+        Assert.Equal(1, body.GetProperty("page").GetInt32());
+        Assert.Equal(10, body.GetProperty("pageSize").GetInt32());
+        Assert.True(body.GetProperty("items").GetArrayLength() >= 2);
+    }
+
+    [Fact]
+    public async Task Get_ComPaginacao_RetornaApenasItensDaPagina()
+    {
+        for (int i = 1; i <= 12; i++)
+            await _client.PostAsJsonAsync("/api/todoitems", new { name = $"Item Pag {i}", isComplete = false });
+
+        var page1 = await _client.GetAsync("/api/todoitems?page=1&pageSize=10");
+        var page2 = await _client.GetAsync("/api/todoitems?page=2&pageSize=10");
+
+        Assert.Equal(HttpStatusCode.OK, page1.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, page2.StatusCode);
+
+        var body1 = await page1.Content.ReadFromJsonAsync<JsonElement>();
+        var body2 = await page2.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(10, body1.GetProperty("items").GetArrayLength());
+        Assert.True(body2.GetProperty("items").GetArrayLength() >= 2);
+        Assert.True(body1.GetProperty("hasNextPage").GetBoolean());
+        Assert.False(body1.GetProperty("hasPreviousPage").GetBoolean());
     }
 
     // GET /api/todoitems/{id}
