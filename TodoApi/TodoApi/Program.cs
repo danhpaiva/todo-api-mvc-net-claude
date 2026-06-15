@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TodoApi.Context;
+using TodoApi.Services;
+using TodoApi.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +43,9 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddMemoryCache();
+
+builder.Services.AddScoped<ITodoService, TodoService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseInMemoryDatabase("TodoListDb"));
