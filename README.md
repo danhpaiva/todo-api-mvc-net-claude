@@ -148,6 +148,10 @@ dotnet run --project TodoApi/TodoApi
     "Key": "sua_chave_secreta_aqui",
     "Issuer": "TodoApi",
     "Audience": "TodoApiUsers"
+  },
+  "Auth": {
+    "Username": "admin",
+    "Password": "sua_senha_aqui"
   }
 }
 ```
@@ -158,4 +162,8 @@ dotnet run --project TodoApi/TodoApi
 dotnet test TodoApi/TodoApi.Tests/TodoApi.Tests.csproj
 ```
 
-Os testes usam banco InMemory isolado por teste e `NullLogger` — sem dependências externas ou mocks de framework.
+| Tipo | Localização | Descrição |
+|------|-------------|-----------|
+| Unitários (controllers) | `TodoApi.Tests/Controllers/` | Mockam `I*Service` via Moq |
+| Unitários (repositórios) | `TodoApi.Tests/Repositories/` | Usam banco InMemory isolado por teste |
+| Integração | `TodoApi.Tests/Integration/` | Testam o pipeline HTTP completo com `WebApplicationFactory` |
